@@ -14,13 +14,19 @@ function App() {
   // Stores the cow's current position, starting as nothing until we fetch it.
   const [position, setPosition] = useState(null);
 
-  // Runs once when the page loads, asking the backend for the cow's location.
+    // Runs when the page loads, and repeats every 5 seconds after that.
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/location/cow001")
-      .then((res) => res.json())
-      .then((data) => setPosition([data.latitude, data.longitude]));
-  }, []);
+    const fetchLocation = () => {
+      fetch("http://127.0.0.1:8000/location/cow001")
+        .then((res) => res.json())
+        .then((data) => setPosition([data.latitude, data.longitude]));
+    };
 
+    fetchLocation();
+    const interval = setInterval(fetchLocation, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
     return (
     <MapContainer center={[5.6037, -0.1870]} zoom={13} style={{ height: "100vh", width: "100%" }}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
