@@ -2,7 +2,7 @@
 import React from "react";
 
 // Lets us run code automatically when the component loads, and store values that update the screen.
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // Brings in the map pieces we need from react-leaflet.
 import { MapContainer, TileLayer, CircleMarker, Popup, Circle, Marker } from "react-leaflet";
@@ -31,10 +31,23 @@ const cowIcon = L.divIcon({
   iconSize: [28, 28],
 });
 
+// Generates a short beep sound directly, no file or link needed.
+function playBeep() {
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+  oscillator.connect(audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + 0.3);
+}
+
 function App() {
   // Stores the cow's current position, starting as nothing until we fetch it.
   const [position, setPosition] = useState(null);
   const [distanceFromCenter, setDistanceFromCenter] = useState(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const isOutsideRef = useRef(false);
 
   // Runs when the page loads, and repeats every 5 seconds after that.
   useEffect(() => {
@@ -45,6 +58,12 @@ function App() {
           setPosition([data.latitude, data.longitude]);
           const dist = getDistance(5.6037, -0.1870, data.latitude, data.longitude);
           setDistanceFromCenter(dist);
+
+          const outsideNow = dist > 200;
+          if (outsideNow && !isOutsideRef.current && soundEnabled) {
+            playBeep();
+          }
+          isOutsideRef.current = outsideNow;
         });
     };
 
@@ -52,10 +71,13 @@ function App() {
     const interval = setInterval(fetchLocation, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [soundEnabled]);
 
   return (
     <div>
+      {!soundEnabled && (
+        <button onClick={() => setSoundEnabled(true)}>Enable Sound Alerts</button>
+      )}
       <h2>
         {distanceFromCenter !== null &&
           (distanceFromCenter < 200 ? "Status: Inside boundary" : "ALERT: Outside boundary")}
