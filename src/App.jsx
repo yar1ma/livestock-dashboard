@@ -5,7 +5,7 @@ import React from "react";
 import { useState, useEffect, useRef } from "react";
 
 // Brings in the map pieces we need from react-leaflet.
-import { MapContainer, TileLayer, CircleMarker, Popup, Circle, Marker } from "react-leaflet";
+import { MapContainer, TileLayer, Popup, Circle, Marker } from "react-leaflet";
 
 import L from "leaflet";
 
@@ -14,7 +14,7 @@ import "leaflet/dist/leaflet.css";
 
 // Calculates the distance in meters between two GPS points.
 function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // Earth's radius in meters
+  const R = 6371000;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -43,32 +43,36 @@ function playBeep() {
 }
 
 function App() {
-  // Stores the cow's current position, starting as nothing until we fetch it.
-  const [position, setPosition] = useState(null);
-  const [distanceFromCenter, setDistanceFromCenter] = useState(null);
+  // Stores every animal's latest position, as a list.
+  const [animals, setAnimals] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const isOutsideRef = useRef(false);
 
-  // Runs when the page loads, and repeats every 5 seconds after that.
+  // Remembers each animal's outside/inside state separately, by animal_id.
+  const outsideStatusRef = useRef({});
+
   useEffect(() => {
-    const fetchLocation = () => {
-      fetch("http://127.0.0.1:8000/location/cow001")
+    const fetchLocations = () => {
+      fetch("https://livestock-tracker-ucus.onrender.com/locations")
         .then((res) => res.json())
         .then((data) => {
-          setPosition([data.latitude, data.longitude]);
-          const dist = getDistance(5.6037, -0.1870, data.latitude, data.longitude);
-          setDistanceFromCenter(dist);
+          data.forEach((animal) => {
+            const dist = getDistance(5.6037, -0.1870, animal.latitude, animal.longitude);
+            const outsideNow = dist > 200;
+            const wasOutside = outsideStatusRef.current[animal.animal_id] || false;
 
-          const outsideNow = dist > 200;
-          if (outsideNow && !isOutsideRef.current && soundEnabled) {
-            playBeep();
-          }
-          isOutsideRef.current = outsideNow;
+            if (outsideNow && !wasOutside && soundEnabled) {
+              playBeep();
+            }
+            outsideStatusRef.current[animal.animal_id] = outsideNow;
+            animal.distance = dist;
+            animal.isOutside = outsideNow;
+          });
+          setAnimals(data);
         });
     };
 
-    fetchLocation();
-    const interval = setInterval(fetchLocation, 5000);
+    fetchLocations();
+    const interval = setInterval(fetchLocations, 5000);
 
     return () => clearInterval(interval);
   }, [soundEnabled]);
@@ -78,10 +82,13 @@ function App() {
       {!soundEnabled && (
         <button onClick={() => setSoundEnabled(true)}>Enable Sound Alerts</button>
       )}
-      <h2>
-        {distanceFromCenter !== null &&
-          (distanceFromCenter < 200 ? "Status: Inside boundary" : "ALERT: Outside boundary")}
-      </h2>
+      <ul>
+        {animals.map((animal) => (
+          <li key={animal.animal_id}>
+            {animal.animal_id}: {animal.isOutside ? "ALERT: Outside boundary" : "Status: Inside boundary"}
+          </li>
+        ))}
+      </ul>
       <MapContainer center={[5.6037, -0.1870]} zoom={13} style={{ height: "90vh", width: "100%" }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <Circle
@@ -89,11 +96,11 @@ function App() {
           radius={200}
           pathOptions={{ color: "blue", fillOpacity: 0.1 }}
         />
-        {position && (
-          <Marker position={position} icon={cowIcon}>
-            <Popup>Cow #001</Popup>
+        {animals.map((animal) => (
+          <Marker key={animal.animal_id} position={[animal.latitude, animal.longitude]} icon={cowIcon}>
+            <Popup>{animal.animal_id}</Popup>
           </Marker>
-        )}
+        ))}
       </MapContainer>
     </div>
   );
